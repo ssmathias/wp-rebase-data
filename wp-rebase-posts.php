@@ -88,7 +88,7 @@ class WP_Rebase_Data {
 		function doResaveAction() {
 			jQuery.ajax({
 				"method": "GET",
-				"async": false,
+				"async": true,
 				"url": <?php echo json_encode(admin_url('admin-ajax.php')); ?>,
 				"data": {
 					"action": "wp_rebase_data",
@@ -120,7 +120,7 @@ class WP_Rebase_Data {
 								
 					if (response.total_records > response.records_complete) {
 						// We need to do this again. Loop it with a timeout so we can redraw the screen.
-						window.setTimeout(doResaveAction, 1);
+						doResaveAction();
 					}
 					else {
 						resavePosts.jForm
@@ -171,7 +171,7 @@ class WP_Rebase_Data {
 								.show()
 								.find(".current-task")
 									.html(<?php echo json_encode(__('Saving Records')); ?>);
-						window.setTimeout(doResaveAction, 1);
+						doResaveAction();
 					});
 		});
 		<?php
