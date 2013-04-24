@@ -1,4 +1,7 @@
 # CHANGELOG
 
+## in-dev
+- Updated to use asynchronous calls for updates, improves handling of page by not blocking interaction or redraw.
+
 ## 0.1
 - Initial commit. Includes simple interaction to resave post data by post type and status.
