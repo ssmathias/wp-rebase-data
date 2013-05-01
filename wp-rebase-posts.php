@@ -7,21 +7,32 @@
  * Version: 0.1
  * Author URI: http://github.com/ssmathias/
  **/
- 
-class WP_Rebase_Data {
 
+define('WP_REBASE_PLUGIN_DIR', trailingslashit(dirname(__file__)));
+
+class WP_Rebase_Data {
+	public static $current;
+	
 	public static function admin_init() {
-		global $pagenow;
-		if ($pagenow == 'options-general.php' && !empty($_GET['page']) && $_GET['page'] == 'wp-rebase-data') {
+		self::$current = isset($_GET['wp_rebase_screen']) ? $_GET['wp_rebase_screen'] : 'postdata';
+		if (!class_exists('WPRD_Rebase_Posts')) {
+			include WP_REBASE_PLUGIN_DIR.'classes/class.rebase.post.php';
+		}
+		do_action('wp_rebase_load_libraries');
+	}
+
+	public static function admin_enqueue_scripts($hook) {
+		if ($hook == 'tools_page_wp-rebase-data') {
 			wp_enqueue_script('wp-rebase-data-js', admin_url('admin-ajax.php').'?action=wp_rebase_data_js', array('jquery'));
 			wp_enqueue_style('wp-rebase-data-css', admin_url('admin-ajax.php').'?action=wp_rebase_data_css');
 		}
 	}
 
 	public static function admin_menu() {
-		add_options_page(
-			__('WP Rebase Data', 'sm-wp-rebase-data'),
-			__('WP Rebase Data', 'sm-wp-rebase-data'),
+		add_submenu_page(
+			'tools.php',
+			__('Rebase Data', 'sm-wp-rebase-data'),
+			__('Rebase Data', 'sm-wp-rebase-data'),
 			'manage_options',
 			'wp-rebase-data',
 			'WP_Rebase_Data::admin_page'
@@ -30,68 +41,47 @@ class WP_Rebase_Data {
 	
 	public static function admin_page() {
 		if (!current_user_can('manage_options')) {
-			echo 'You do not have sufficient privileges to access this page.';
+			echo __('You do not have sufficient privileges to access this page.', 'sm-wp-rebase-data');
 			return;
 		}
 		screen_icon();
-		global $wpdb;
-		$post_types = $wpdb->get_col("SELECT DISTINCT post_type FROM {$wpdb->posts}");
-		$allowed_post_types = array_diff($post_types, apply_filters('wp_rebase_data_excluded_types', array('revision')));
-		$post_stati = $wpdb->get_col("SELECT DISTINCT post_status FROM {$wpdb->posts}");
-		$allowed_post_stati = array_diff($post_stati, apply_filters('wp_rebase_data_excluded_stati', array('auto-draft', 'inherit')));
 		?>
-		<h1><?php echo esc_html(__('WP Rebase Data', 'sm-wp-rebase-data')); ?></h1>
-		<form id="wp-rebase-data-form" action="#" method="POST">
-		<?php if (!empty($allowed_post_types)) { ?>
-		<fieldset id="wp-rebase-data-post-types">
-			<legend><?php echo esc_html(__('Post Types', 'sm-wp-rebase-data')); ?></legend>
-			<ul class="checkbox-list">
-				<?php foreach ($allowed_post_types as $type) { ?>
-				<li>
-					<input type="checkbox" name="post-types[]" id="post-type-<?php echo $type; ?>" value="<?php echo $type; ?>" />
-					<label for="post-type-<?php echo $type; ?>"><?php echo $type; ?></label>
-				</li>
-				<?php } ?>
-			</ul>
-		</fieldset>
-		<?php } ?>
-		<?php if (!empty($allowed_post_stati)) { ?>
-		<fieldset id="wp-rebase-data-post-stati">
-			<legend><?php echo esc_html(__('Post Stati', 'sm-wp-rebase-data')); ?></legend>
-			<ul class="checkbox-list">
-				<?php foreach ($allowed_post_stati as $status) { ?>
-				<li>
-					<input type="checkbox" name="post-status[]" id="post-status-<?php echo $status; ?>" value="<?php echo $status; ?>" />
-					<label for="post-status-<?php echo $status; ?>"><?php echo $status; ?></label>
-				</li>
-				<?php } ?>
-			</ul>
-		</fieldset>
-		<button class="button button-primary" id="btn-run-resave"><?php echo esc_html(__('Resave Selected Posts')); ?></button>
-		<div class="progress-indicator">
-			<div class="progress-bar-wrapper" style="float:left;clear:both">
-				<div class="progress-bar"></div>
-			</div>
-			<div class="current-task" style="float:left;"></div>
-			<div class="numeric-indicator" style="float:right;"></div>
-			<div class="ajax-errors"></div>
-		</div>
-		</form>
-		<?php } ?>
+		<h1><?php echo esc_html(__('Rebase Data', 'sm-wp-rebase-data')); ?></h1>
 		<?php
+		$tabs = apply_filters('wp_rebase_admin_tabs', array());
+		$current = isset($_GET['wp_rebase_screen']) ? $_GET['wp_rebase_screen'] : 'default';
+		if (empty($current) || !isset($tabs[$current])) {
+			$current = array_keys($tabs);
+			$current = $current[0];
+		}
+		?>
+		<ul class="tab-list" id="wp-rebase-tabs">
+		<?php
+		foreach ($tabs as $hook=>$tabdata) {
+			$classes = 'tab';
+			if ($current == $hook) { $classes .= ' current-tab'; };
+		?>
+			<li class="<?php echo esc_attr($classes); ?>"><a href="#<?php echo esc_attr($tabdata['id']); ?>"><?php echo esc_html($tabdata['title']); ?></a></li>
+		<?php } ?>
+		</ul>
+		
+		<?php
+		do_action("wp_rebase_admin_screen_$current");
 	}
 	
 	public static function admin_js() {
 		header('Content-Type: text/javascript');
+		$current = self::$current;
 		?>
-		var resavePosts = {"jForm": null, "post_types": [], "post_stati": [], "page": 1};
-		function doResaveAction() {
+		function doResaveAction(action) {
 			jQuery.ajax({
-				"method": "GET",
+				"method": "POST",
 				"async": true,
-				"url": <?php echo json_encode(admin_url('admin-ajax.php')); ?>,
+				"url": ajaxurl,
 				"data": {
 					"action": "wp_rebase_data",
+					"resave_action": action,
+					
 					"post_types": resavePosts.post_types,
 					"post_stati": resavePosts.post_stati,
 					"paged": resavePosts.page
@@ -175,11 +165,15 @@ class WP_Rebase_Data {
 					});
 		});
 		<?php
+		do_action('wp_rebase_admin_scripts');
+		do_action("wp_rebase_admin_scripts_{$current}");
 		exit();
 	}
 	
 	public static function admin_css() {
 		header('Content-Type: text/css');
+		do_action('wp_rebase_admin_scripts');
+		do_action("wp_rebase_admin_scripts_{$current}");
 		?>
 		#wp-rebase-data-form {
 			width: 400px;
@@ -213,6 +207,8 @@ class WP_Rebase_Data {
 			background-color: lime;
 		}
 		<?php
+		do_action('wp_rebase_admin_scripts');
+		do_action("wp_rebase_admin_scripts_{$current}");
 		exit();
 	}
 
@@ -303,7 +299,8 @@ class WP_Rebase_Data {
 	}
 
 }
-add_action('admin_init', 'WP_Rebase_Data::admin_init');
+add_action('admin_init', 'WP_Rebase_Data::admin_init', 1);
+add_action('admin_enqueue_scripts', 'WP_Rebase_Data::admin_enqueue_scripts');
 add_action('admin_menu', 'WP_Rebase_Data::admin_menu');
 add_action('wp_ajax_wp_rebase_data_js', 'WP_Rebase_Data::admin_js');
 add_action('wp_ajax_wp_rebase_data_css', 'WP_Rebase_Data::admin_css');
