@@ -10,6 +10,7 @@ class WPRD_Rebase_Postdata {
 	static function apply() {
 		// Execute at wp_rebase_load_libraries
 		$hook = self::$_hook;
+
 		add_filter('wp_rebase_admin_tabs', 'WPRD_Rebase_Postdata::adminTab');
 		add_action("wp_rebase_admin_styles_{$hook}", 'WPRD_Rebase_Postdata::adminStyles');
 		add_action("wp_rebase_admin_scripts_{$hook}", 'WPRD_Rebase_Postdata::adminScripts');
@@ -19,6 +20,169 @@ class WPRD_Rebase_Postdata {
 	
 	static function handleAjax() {
 		// Execute on appropriate ajax call
+		die('TEST');
+		if (!current_user_can('manage_options')) {
+			header('HTTP/1.0 403 Unauthorized');
+			$response = json_encode(array(
+				'status' => 'error',
+				'message' => 'You do not have the necessary permissions to complete this request.'
+			));
+			print $response;
+			exit();
+		}
+		if (empty($_POST['post_types'])) {
+			header('HTTP/1.0 401 Invalid Request');
+			$response = json_encode(array(
+				'status' => 'error',
+				'message' => 'At least one post type must be selected'
+			));
+			print $response;
+			exit();
+		}
+		$post_types = $_POST['post_types'];
+		if (!is_array($post_types)) {
+			$post_types = explode(',', $post_types);
+			// TODO Use array_map here
+			foreach ($post_types as $i=>$type) {
+				$post_types[$i] = trim($type);
+			}
+		}
+		if (empty($_POST['post_stati'])) {
+			header('HTTP/1.0 401 Invalid Request');
+			$response = json_encode(array(
+				'status' => 'error',
+				'message' => 'At least one post status must be selected'
+			));
+			print $response;
+			exit();
+		}
+		$post_stati = $_POST['post_stati'];
+		if (!is_array($post_stati)) {
+			$post_stati = array($post_stati);
+			// TODO Use array_map here
+			foreach ($post_stati as $i=>$status) {
+				$post_stati[$i] = trim($status);
+			}
+		}
+		$paged = 1;
+		if (!empty($_POST['paged']) && is_numeric($_POST['paged'])) {
+			$paged = intval($_POST['paged']);
+		}
+		$warnings = array();
+		$query = new WP_Query(array(
+			'post_type' => $post_types,
+			'post_status' => $post_stati,
+			'posts_per_page' => $posts_per_page,
+			'paged' => $paged,
+			'no_found_rows' => false,
+			'suppress_filters' => true,
+		));
+		$total_done = $posts_per_page * ($paged - 1);
+		while ($query->have_posts()) {
+			$query->the_post();
+			$post_array = array();
+			$post_array['ID'] = $post->ID;
+			$result = wp_update_post($post_array);
+			if (is_wp_error($result)) {
+				$warnings[] = 'Error saving post #'.$post->ID;
+			}
+			++$total_done;
+		}
+		if (!empty($warnings)) {
+			header('HTTP/1.0 201 Done With Errors');
+		}
+		else {
+			header('HTTP/1.0 200 Success');
+		}
+		$response = json_encode(array(
+			'status' => 'success',
+			'total_records' => $query->found_posts,
+			'records_complete' => $total_done,
+			'warnings' => $warnings
+		));
+		print $response;
+		exit();
+	}
+	
+	static function adminStyles() {
+		// Admin styles for this form
+		$form_id = '#wp-rebase-data-'.self::$_id;
+		$styles = <<<EOD
+		$form_id {
+			width: 400px;
+		}
+		$form_id fieldset {
+			border: thin solid #333333;
+			padding: 0 5px;
+			width: 100%;
+		}
+		$form_id legend {
+			margin: 0px 5px;
+		}
+		$form_id li {
+			width: 185px;
+			float: left;
+			margin-right: 5px;
+		}
+		$form_id .progress-indicator {
+			display: none;
+		}
+		$form_id .progress-bar-wrapper {
+			width: 100%;
+			padding: 2px;
+			background-color: #999;
+			border-radius: 3px;
+		}
+		$form_id .progress-bar {
+			height: 20px;
+			width: 0px;
+			border-radius: 2px;
+			background-color: lime;
+		}
+EOD;
+		echo $styles;
+	}
+	
+	static  function adminScripts() {
+		// Admin scripts for this form
+		$form_selector = '#wp-rebase-data-'.self::$_id;
+		?>
+		jQuery(document).ready(function($) {
+			var $form = $(<?php echo json_encode($form_selector); ?>);
+			$form
+				.on("submit", function(e) {
+					var data = {};
+					data.hook = <?php echo json_encode(self::$_hook); ?>;
+					data.post_stati = [];
+					data.post_types = [];
+					data.page = 1;
+					$form
+						.find("#wp-rebase-data-post-types")
+							.find("input[type=\"checkbox\"]:checked").each(function() {
+								data.post_types.push($(this).val());
+							})
+							.end()
+						.end().find("#wp-rebase-data-post-stati")
+							.find("input[type=\"checkbox\"]:checked").each(function() {
+								data.post_stati.push($(this).val());
+							})
+						.end().find("button, input").attr("disabled", "disabled")
+						.end().find(".progress-indicator").show()
+							.find(".current-task").html(<?php echo json_encode(__('Saving Records', 'sm-wp-rebase-data')); ?>);
+					doResave(data);
+					e.preventDefault();
+					e.stopPropagation();
+					return false;
+				})
+			$("body").on("wpRebaseAjaxError", function(xhr) {	
+				$form
+					.find("button, input")
+						.removeAttr("disabled");
+				alert(<?php echo json_encode(__('Could not save. Confirm your settings and try again.')); ?>);
+				
+			});
+		});
+		<?php
 	}
 	
 	static function adminScreen() {
@@ -29,15 +193,15 @@ class WPRD_Rebase_Postdata {
 		$post_stati = $wpdb->get_col("SELECT DISTINCT post_status FROM {$wpdb->posts}");
 		$allowed_post_stati = array_diff($post_stati, apply_filters("wp_rebase_data_{self::$_hook}_excluded_stati", array('auto-draft', 'inherit')));
 		?>
-		<form id="wp-rebase-data-form" action="#" method="POST">
+		<form id="wp-rebase-data-postdata" action="#" method="POST">
 		<?php if (!empty($allowed_post_types)) { ?>
 		<fieldset id="wp-rebase-data-post-types">
 			<legend><?php echo esc_html(__('Post Types', 'sm-wp-rebase-data')); ?></legend>
 			<ul class="checkbox-list">
 				<?php foreach ($allowed_post_types as $type) { ?>
 				<li>
-					<input type="checkbox" name="post-types[]" id="post-type-<?php echo $type; ?>" value="<?php echo $type; ?>" />
-					<label for="post-type-<?php echo $type; ?>"><?php echo $type; ?></label>
+					<input type="checkbox" name="post-types[]" id="post-type-<?php echo esc_attr($type); ?>" value="<?php echo esc_attr($type); ?>" />
+					<label for="post-type-<?php echo esc_attr($type); ?>"><?php echo esc_html($type); ?></label>
 				</li>
 				<?php } ?>
 			</ul>
@@ -49,13 +213,20 @@ class WPRD_Rebase_Postdata {
 			<ul class="checkbox-list">
 				<?php foreach ($allowed_post_stati as $status) { ?>
 				<li>
-					<input type="checkbox" name="post-status[]" id="post-status-<?php echo $status; ?>" value="<?php echo $status; ?>" />
-					<label for="post-status-<?php echo $status; ?>"><?php echo $status; ?></label>
+					<input type="checkbox" name="post-status[]" id="post-status-<?php echo esc_attr($status); ?>" value="<?php echo esc_attr($status); ?>" />
+					<label for="post-status-<?php echo $status; ?>"><?php echo esc_html($status); ?></label>
 				</li>
 				<?php } ?>
 			</ul>
 		</fieldset>
-		<button class="button button-primary" id="btn-run-resave"><?php echo esc_html(__('Resave Selected Posts')); ?></button>
+		<fieldset id="wp-rebase-data-post-meta">
+			<legend><?php echo esc_html(__('Post Information', 'sm-wp-rebase-data')); ?></legend>
+			<ul class="checkbox-list">
+				<li>
+					<input type="checkbox" name="regen-thumbnails" id="post-info-regen-thumbnails" value="1" />
+					<label for="post-info-regen-thumbnails"><?php echo esc_html(__('Regenerate Thumbnails', 'sm-wp-rebase-data')); ?></label>
+		</fieldset>
+		<button class="button button-primary" id="btn-run-resave"><?php echo esc_html(__('Resave Selected Posts', 'sm-wp-rebase-data')); ?></button>
 		<div class="progress-indicator">
 			<div class="progress-bar-wrapper" style="float:left;clear:both">
 				<div class="progress-bar"></div>
@@ -70,10 +241,12 @@ class WPRD_Rebase_Postdata {
 	
 	static function adminTab($tabs = array()) {
 		// Add appropriate tab for display.
-		$tabs[self::$_hook] = array(
-			'title' => __('Post Data', 'sm-wp-rebase-data'),
-			'id' => self::$_id,
-		);
+		if (current_user_can('manage_options')) {
+			$tabs[self::$_hook] = array(
+				'title' => __('Post Data', 'sm-wp-rebase-data'),
+				'id' => self::$_id,
+			);
+		}
 		return $tabs;
 	}
 
