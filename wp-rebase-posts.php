@@ -60,10 +60,21 @@ class WP_Rebase_Data {
 		<?php
 		foreach (self::$_tabs as $hook=>$tabdata) {
 			$classes = 'tab';
-			if (self::$_current == $hook) { $classes .= ' current-tab'; };
-		?>
-			<li class="<?php echo esc_attr($classes); ?>"><a href="#<?php echo esc_attr($tabdata['id']); ?>"><?php echo esc_html($tabdata['title']); ?></a></li>
-		<?php } ?>
+			if (self::$_current == $hook) {
+			?>
+			<li class="<?php echo esc_attr($classes); ?> current-tab">
+				<span><?php echo esc_html($tabdata['title']); ?></span>
+			<li>
+			<?php
+			}
+			else {
+			?>
+			<li class="<?php echo esc_attr($classes); ?>">
+				<a href="#<?php echo esc_attr($tabdata['id']); ?>"><?php echo esc_html($tabdata['title']); ?></a>
+			</li>
+			<?php 
+			}
+		} ?>
 		</ul>
 		
 		<?php
@@ -78,8 +89,8 @@ class WP_Rebase_Data {
 			if (typeof data.action === "undefined") {
 				data.action = "wp_rebase_data";
 			}
-			jQuery.ajax({
-				"method": "POST",
+			$.ajax({
+				"type": "POST",
 				"async": true,
 				"url": ajaxurl,
 				"data": data, /*{
@@ -90,42 +101,12 @@ class WP_Rebase_Data {
 					"paged": resavePosts.page
 				},*/
 				"success": function(response) {
-					var completePercent = 0;
-					$(this).trigger("wpRebaseAjaxSuccess", response);
-					response = jQuery.parseJSON(response);
-					resavePosts.page += 1;
-					hasComplete = (response.total_records == response.records_complete);
-					if (response.total_records == 0) {
-						completePercent = "100%";
-					}
-					else {
-						completePercent = Math.round((response.records_complete / response.total_records) * 100) + "%";
-					}
-					resavePosts.jForm
-						.find(".progress-indicator")
-							.find(".progress-bar")
-								.width(completePercent)
-								.end()
-							.find(".numeric-indicator")
-								.html(response.records_complete + "/" + response.total_records)
-								.end()
-							.find(".ajax-errors")
-								.append(response.warnings);
-								
-					if (response.total_records > response.records_complete) {
-						// We need to do this again. Loop it with a timeout so we can redraw the screen.
-						doResaveAction();
-					}
-					else {
-						resavePosts.jForm
-							.find("button, input")
-								.removeAttr("disabled");
-					}
+					$("body").trigger("wpRebaseAjaxSuccess", response);
 				},
 				"error": function(xhr) {
 					$("body").trigger("wpRebaseAjaxError", xhr);
 				}
-			});
+			});1
 		}
 		<?php
 		do_action('wp_rebase_admin_scripts');
@@ -138,6 +119,31 @@ class WP_Rebase_Data {
 	public static function admin_css() {
 		header('Content-Type: text/css');
 		do_action('wp_rebase_admin_styles');
+		?>
+		.tab-list {
+			border-bottom: thin solid #333;
+			padding:0;
+			margin:3px;
+			padding-bottom:-1px;
+			height:31px;
+			position:relative;
+		}
+		.tab-list .tab {
+			border: thin solid #333;
+			border-radius: 5px 5px 0 0;
+			float:left;
+			padding:5px;
+			margin:0 5px;
+			height:20px;
+		}
+		.tab-list .tab.current-tab {
+			border-bottom: thin solid #FFF;
+		}
+		.tab-list .tab.current-tab a {
+			cursor:default;
+			text-decoration:none;
+		}
+		<?php
 		if ($_GET['hook']) {
 			do_action('wp_rebase_admin_styles_'.$_GET['hook']);
 		}

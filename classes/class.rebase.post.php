@@ -15,12 +15,12 @@ class WPRD_Rebase_Postdata {
 		add_action("wp_rebase_admin_styles_{$hook}", 'WPRD_Rebase_Postdata::adminStyles');
 		add_action("wp_rebase_admin_scripts_{$hook}", 'WPRD_Rebase_Postdata::adminScripts');
 		add_action("wp_rebase_admin_screen_{$hook}", 'WPRD_Rebase_Postdata::adminScreen');
-		add_action("wp_rebaase_ajax_{$hook}", 'WPRD_Rebase_Postdata::handleAjax');
+		add_action("wp_rebase_ajax_{$hook}", 'WPRD_Rebase_Postdata::handleAjax');
 	}
 	
 	static function handleAjax() {
+		global $post;
 		// Execute on appropriate ajax call
-		die('TEST');
 		if (!current_user_can('manage_options')) {
 			header('HTTP/1.0 403 Unauthorized');
 			$response = json_encode(array(
@@ -82,6 +82,7 @@ class WPRD_Rebase_Postdata {
 			$query->the_post();
 			$post_array = array();
 			$post_array['ID'] = $post->ID;
+			
 			$result = wp_update_post($post_array);
 			if (is_wp_error($result)) {
 				$warnings[] = 'Error saving post #'.$post->ID;
@@ -96,7 +97,7 @@ class WPRD_Rebase_Postdata {
 		}
 		$response = json_encode(array(
 			'status' => 'success',
-			'total_records' => $query->found_posts,
+			'total_records' => intval($query->found_posts),
 			'records_complete' => $total_done,
 			'warnings' => $warnings
 		));
@@ -148,7 +149,8 @@ EOD;
 		$form_selector = '#wp-rebase-data-'.self::$_id;
 		?>
 		jQuery(document).ready(function($) {
-			var $form = $(<?php echo json_encode($form_selector); ?>);
+			var $form = $(<?php echo json_encode($form_selector); ?>),
+				data = {};
 			$form
 				.on("submit", function(e) {
 					var data = {};
@@ -160,12 +162,11 @@ EOD;
 						.find("#wp-rebase-data-post-types")
 							.find("input[type=\"checkbox\"]:checked").each(function() {
 								data.post_types.push($(this).val());
-							})
-							.end()
+							}).end()
 						.end().find("#wp-rebase-data-post-stati")
 							.find("input[type=\"checkbox\"]:checked").each(function() {
 								data.post_stati.push($(this).val());
-							})
+							}).end()
 						.end().find("button, input").attr("disabled", "disabled")
 						.end().find(".progress-indicator").show()
 							.find(".current-task").html(<?php echo json_encode(__('Saving Records', 'sm-wp-rebase-data')); ?>);
@@ -180,6 +181,40 @@ EOD;
 						.removeAttr("disabled");
 				alert(<?php echo json_encode(__('Could not save. Confirm your settings and try again.')); ?>);
 				
+			}).on("wpRebaseAjaxSuccess", function(e, response) {
+				var completePercent;
+				response = jQuery.parseJSON(response);
+				data.page += 1;
+				hasComplete = (response.total_records <= response.records_complete);
+				if (response.total_records == 0) {
+					completePercent = "100%";
+				}
+				else {
+					completePercent = Math.round((response.records_complete / response.total_records) * 100) + "%";
+				}
+				
+				$form
+					.find(".progress-indicator")
+						.find(".progress-bar")
+							.width(completePercent)
+							.end()
+						.find(".numeric-indicator")
+							.html(response.records_complete + "/" + response.total_records)
+							.end()
+						.find(".ajax-errors")
+							.append(response.warnings);
+							
+				if (!hasComplete) {
+					// We need to do this again. Loop it with a timeout so we can redraw the screen.
+					doResave(data);
+				}
+				else {
+					$form
+						.find("button, input")
+							.removeAttr("disabled")
+						.end().find(".progress-indicator .current-task")
+							.html(<?php echo json_encode(__('Saving Records Complete', 'sm-wp-rebase-data'))?>);
+				}
 			});
 		});
 		<?php
