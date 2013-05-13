@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v2-refactor
+- Updated to be more extensible
+- Now automatically regenerates attachment metadata (aka regenerate thumbnails) when rebasing attachments.
+
 ## in-dev
 - Updated to use asynchronous calls for updates, improves handling of page by not blocking interaction or redraw.
 
