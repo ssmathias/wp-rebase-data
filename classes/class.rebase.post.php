@@ -21,11 +21,21 @@ class WPRD_Rebase_Postdata {
 	static function handleAjax() {
 		global $post;
 		// Execute on appropriate ajax call
-		if (!current_user_can('manage_options')) {
-			header('HTTP/1.0 403 Unauthorized');
+		if (!check_admin_referer('wp_rebase_data_postdata', 'key')) {
+			header('HTTP/1.0 403 Forbidden');
 			$response = json_encode(array(
 				'status' => 'error',
-				'message' => 'You do not have the necessary permissions to complete this request.'
+				'message' => 'I\'m sorry, Dave. I can\'t do that.',
+			));
+			print $response;
+			exit();
+		}
+		$new_key = wp_create_nonce('wp_rebase_data_postdata');
+		if (!current_user_can('manage_options')) {
+			header('HTTP/1.0 403 Forbidden');
+			$response = json_encode(array(
+				'status' => 'error',
+				'message' => 'You do not have the necessary permissions to complete this request.',
 			));
 			print $response;
 			exit();
@@ -34,7 +44,8 @@ class WPRD_Rebase_Postdata {
 			header('HTTP/1.0 401 Invalid Request');
 			$response = json_encode(array(
 				'status' => 'error',
-				'message' => 'At least one post type must be selected'
+				'message' => 'At least one post type must be selected',
+				'key' => $new_key,
 			));
 			print $response;
 			exit();
@@ -51,7 +62,8 @@ class WPRD_Rebase_Postdata {
 			header('HTTP/1.0 401 Invalid Request');
 			$response = json_encode(array(
 				'status' => 'error',
-				'message' => 'At least one post status must be selected'
+				'message' => 'At least one post status must be selected',
+				'key' => $new_key,
 			));
 			print $response;
 			exit();
@@ -87,6 +99,12 @@ class WPRD_Rebase_Postdata {
 			if (is_wp_error($result)) {
 				$warnings[] = 'Error saving post #'.$post->ID;
 			}
+			else if ($post->post_type == 'attachment' && $file = get_attached_file($post->ID, false)) {
+				$metadata = wp_generate_attachment_metadata($post->ID, $file);
+				if (!empty($metadata)) {
+					wp_update_attachment_metadata($post->ID, $metadata);
+				}
+			}
 			++$total_done;
 		}
 		if (!empty($warnings)) {
@@ -99,7 +117,8 @@ class WPRD_Rebase_Postdata {
 			'status' => 'success',
 			'total_records' => intval($query->found_posts),
 			'records_complete' => $total_done,
-			'warnings' => $warnings
+			'warnings' => $warnings,
+			'key' => $new_key,
 		));
 		print $response;
 		exit();
@@ -150,14 +169,18 @@ EOD;
 		?>
 		jQuery(document).ready(function($) {
 			var $form = $(<?php echo json_encode($form_selector); ?>),
+				$nonceField = $(<?php echo json_encode($form_selector . ' input[name="key"]'); ?>),
 				data = {};
 			$form
 				.on("submit", function(e) {
 					var data = {};
+					e.preventDefault();
+					e.stopPropagation();
 					data.hook = <?php echo json_encode(self::$_hook); ?>;
 					data.post_stati = [];
 					data.post_types = [];
 					data.page = 1;
+					data.key = $form.find("input[name=\"key\"]").val();
 					$form
 						.find("#wp-rebase-data-post-types")
 							.find("input[type=\"checkbox\"]:checked").each(function() {
@@ -171,9 +194,6 @@ EOD;
 						.end().find(".progress-indicator").show()
 							.find(".current-task").html(<?php echo json_encode(__('Saving Records', 'sm-wp-rebase-data')); ?>);
 					doResave(data);
-					e.preventDefault();
-					e.stopPropagation();
-					return false;
 				})
 			$("body").on("wpRebaseAjaxError", function(xhr) {	
 				$form
@@ -185,6 +205,11 @@ EOD;
 				var completePercent;
 				response = jQuery.parseJSON(response);
 				data.page += 1;
+				if (typeof response.key !== "undefined") {
+					data.key = response.key
+					$nonceField.val(response.key);
+				}
+				console.log(response);
 				hasComplete = (response.total_records <= response.records_complete);
 				if (response.total_records == 0) {
 					completePercent = "100%";
@@ -226,9 +251,10 @@ EOD;
 		$post_types = $wpdb->get_col("SELECT DISTINCT post_type FROM {$wpdb->posts}");
 		$allowed_post_types = array_diff($post_types, apply_filters("wp_rebase_data_{self::$_hook}_excluded_types", array('revision')));
 		$post_stati = $wpdb->get_col("SELECT DISTINCT post_status FROM {$wpdb->posts}");
-		$allowed_post_stati = array_diff($post_stati, apply_filters("wp_rebase_data_{self::$_hook}_excluded_stati", array('auto-draft', 'inherit')));
+		$allowed_post_stati = array_diff($post_stati, apply_filters("wp_rebase_data_{self::$_hook}_excluded_stati", array('auto-draft')));
 		?>
 		<form id="wp-rebase-data-postdata" action="#" method="POST">
+		<?php wp_nonce_field('wp_rebase_data_postdata', 'key'); ?>
 		<?php if (!empty($allowed_post_types)) { ?>
 		<fieldset id="wp-rebase-data-post-types">
 			<legend><?php echo esc_html(__('Post Types', 'sm-wp-rebase-data')); ?></legend>
@@ -253,13 +279,6 @@ EOD;
 				</li>
 				<?php } ?>
 			</ul>
-		</fieldset>
-		<fieldset id="wp-rebase-data-post-meta">
-			<legend><?php echo esc_html(__('Post Information', 'sm-wp-rebase-data')); ?></legend>
-			<ul class="checkbox-list">
-				<li>
-					<input type="checkbox" name="regen-thumbnails" id="post-info-regen-thumbnails" value="1" />
-					<label for="post-info-regen-thumbnails"><?php echo esc_html(__('Regenerate Thumbnails', 'sm-wp-rebase-data')); ?></label>
 		</fieldset>
 		<button class="button button-primary" id="btn-run-resave"><?php echo esc_html(__('Resave Selected Posts', 'sm-wp-rebase-data')); ?></button>
 		<div class="progress-indicator">
