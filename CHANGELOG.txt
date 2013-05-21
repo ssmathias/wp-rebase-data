@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## in-dev
+## 2.0
 - Updated to be more extensible
 - Now automatically regenerates attachment metadata (aka regenerate thumbnails) when rebasing attachments.
 - Added nonce security and role validation to default postdata module.
