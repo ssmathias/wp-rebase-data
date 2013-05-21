@@ -76,9 +76,12 @@ class WPRD_Rebase_Postdata {
 				$post_stati[$i] = trim($status);
 			}
 		}
+		// May eventually allow posts per page to be configured from front-end.
+		$posts_per_page = 25;
+		
 		$paged = 1;
-		if (!empty($_POST['paged']) && is_numeric($_POST['paged'])) {
-			$paged = intval($_POST['paged']);
+		if (!empty($_POST['page']) && is_numeric($_POST['page'])) {
+			$paged = intval($_POST['page']);
 		}
 		$warnings = array();
 		$query = new WP_Query(array(
@@ -173,7 +176,6 @@ EOD;
 				data = {};
 			$form
 				.on("submit", function(e) {
-					var data = {};
 					e.preventDefault();
 					e.stopPropagation();
 					data.hook = <?php echo json_encode(self::$_hook); ?>;
@@ -204,12 +206,13 @@ EOD;
 			}).on("wpRebaseAjaxSuccess", function(e, response) {
 				var completePercent;
 				response = jQuery.parseJSON(response);
+				console.log("LOGGING OUT DATA AFTER SUCCESS");
+				console.log(data);
 				data.page += 1;
 				if (typeof response.key !== "undefined") {
 					data.key = response.key
 					$nonceField.val(response.key);
 				}
-				console.log(response);
 				hasComplete = (response.total_records <= response.records_complete);
 				if (response.total_records == 0) {
 					completePercent = "100%";
