@@ -1,4 +1,10 @@
 # CHANGELOG
 
+## 2.0
+- Updated to be more extensible
+- Now automatically regenerates attachment metadata (aka regenerate thumbnails) when rebasing attachments.
+- Added nonce security and role validation to default postdata module.
+- Updated to use asynchronous calls for updates, improves handling of page by not blocking interaction or redraw.
+
 ## 0.1
 - Initial commit. Includes simple interaction to resave post data by post type and status.
