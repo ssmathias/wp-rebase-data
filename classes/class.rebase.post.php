@@ -138,9 +138,12 @@ class WPRD_Rebase_Postdata {
 			border: thin solid #333333;
 			padding: 0 5px;
 			width: 100%;
+			margin-bottom: 5px;
+			border-radius: 3px;
 		}
 		$form_id legend {
 			margin: 0px 5px;
+			font-weight: bold;
 		}
 		$form_id li {
 			width: 185px;

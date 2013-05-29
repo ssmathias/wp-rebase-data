@@ -17,13 +17,14 @@ class WP_Rebase_Data {
 	public static function admin_init() {
 		if (!class_exists('WPRD_Rebase_Posts')) {
 			include WP_REBASE_PLUGIN_DIR.'classes/class.rebase.post.php';
+			include WP_REBASE_PLUGIN_DIR.'classes/class.rebase.user.php';
 		}
 		do_action('wp_rebase_load_libraries');
 		
 		$default_tab = apply_filters('wp_rebase_data_default_tab', '');
 		
 		self::$_tabs = apply_filters('wp_rebase_admin_tabs', array());
-		self::$_current = isset($_POST['wp_rebase_screen']) ? $_POST['wp_rebase_screen'] : $default_tab;
+		self::$_current = isset($_REQUEST['wp_rebase_screen']) ? $_REQUEST['wp_rebase_screen'] : $default_tab;
 		if (!isset(self::$_tabs[self::$_current])) {
 			reset(self::$_tabs);
 			self::$_current = key(self::$_tabs);
@@ -55,6 +56,7 @@ class WP_Rebase_Data {
 		}
 		screen_icon();
 		?>
+		<div id="wp-rebase-data-admin">
 		<h1><?php echo esc_html(__('Rebase Data', 'sm-wp-rebase-data')); ?></h1>
 		<ul class="tab-list" id="wp-rebase-tabs">
 		<?php
@@ -64,18 +66,19 @@ class WP_Rebase_Data {
 			?>
 			<li class="<?php echo esc_attr($classes); ?> current-tab">
 				<span><?php echo esc_html($tabdata['title']); ?></span>
-			<li>
+			</li>
 			<?php
 			}
 			else {
 			?>
 			<li class="<?php echo esc_attr($classes); ?>">
-				<a href="#<?php echo esc_attr($tabdata['id']); ?>"><?php echo esc_html($tabdata['title']); ?></a>
+				<a href="<?php echo esc_url(add_query_arg('wp_rebase_screen', $tabdata['id'], $_SERVER['REQUEST_URI'])); ?>"><?php echo esc_html($tabdata['title']); ?></a>
 			</li>
 			<?php 
 			}
 		} ?>
 		</ul>
+		</div>
 		
 		<?php
 		do_action('wp_rebase_admin_screen_'.self::$_current);
@@ -120,28 +123,43 @@ class WP_Rebase_Data {
 		header('Content-Type: text/css');
 		do_action('wp_rebase_admin_styles');
 		?>
+		#wp-rebase-data-admin {
+			width: 95%;
+			min-width: 800px;
+		}
 		.tab-list {
-			border-bottom: thin solid #333;
-			padding:0;
-			margin:3px;
-			padding-bottom:-1px;
-			height:31px;
-			position:relative;
+				padding: 10px 5px 0 5px;
+				border-radius: 5px;
+				background-color: #21759b;
+				background-image: linear-gradient(to bottom,#2a95c5,#21759b);
+				overflow:hidden;
 		}
 		.tab-list .tab {
-			border: thin solid #333;
 			border-radius: 5px 5px 0 0;
 			float:left;
 			padding:5px;
-			margin:0 5px;
+			margin:0 4px;
 			height:20px;
+			background-color: #CCCCFF;
+			background-image: linear-gradient(to top, #CCCCCC, #999999);
+		}
+		.tab-list .tab a,
+		.tab-list .tab span {
+			color: #000033;
+			text-decoration: none;
+			font-weight: bold;
+		}
+		.tab-list .tab.current-tab a,
+		.tab-list .tab.current-tab span {
+			color: #000033;
+		}
+		.tab-list .tab:hover {
+			background-color: #EEEEFF;
+			background-image: linear-gradient(to top, #EEEEEE, #AAAAAA);
 		}
 		.tab-list .tab.current-tab {
-			border-bottom: thin solid #FFF;
-		}
-		.tab-list .tab.current-tab a {
-			cursor:default;
-			text-decoration:none;
+			background-color: #FFFFFF;
+			background-image: linear-gradient(to top, #FFFFFF, #CCCCCC);
 		}
 		<?php
 		if ($_GET['hook']) {
