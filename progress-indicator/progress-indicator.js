@@ -22,6 +22,7 @@
 				margin: auto;\
 				width: 75%;\
 				min-width: 200px;\
+				max-width: 600px;\
 				top: 50px;\
 				position: relative;\
 				border-radius: 5px;\
