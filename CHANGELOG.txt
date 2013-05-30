@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## feature/refactor-progress-indicator
+- Refactored progress indicator into jQuery UI modal with callable member methods
+- Redesigned interaction with default post data form
+
 ## 2.0.1
 - Updated styles for tabs
 - Fixed markup for tabs
