@@ -82,8 +82,8 @@ class WPRD_Rebase_Postdata {
 		$posts_per_page = 25;
 		
 		$paged = 1;
-		if (!empty($_POST['page']) && is_numeric($_POST['page'])) {
-			$paged = intval($_POST['page']);
+		if (!empty($_POST['paged']) && is_numeric($_POST['paged'])) {
+			$paged = intval($_POST['paged']);
 		}
 		$warnings = array();
 		$query = new WP_Query(array(
