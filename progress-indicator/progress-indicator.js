@@ -104,7 +104,7 @@
 				}\
 			.progress-indicator-overlay {\
 				z-index: 100000;\
-				background-color: rgba(128,128,128,0.5);\
+				background-color: rgba(32, 32, 32, 0.8);\
 			}\
 		</style>"),
 		"_create": function() {
