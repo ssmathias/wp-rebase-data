@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## feature/refactor-progress-indicator
+## in-dev
 - Refactored progress indicator into jQuery UI modal with callable member methods
 - Redesigned interaction with default post data form
 - Refactored script/style enqueue and print system
