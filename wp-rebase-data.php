@@ -78,38 +78,36 @@ class WP_Rebase_Data {
 			}
 		} ?>
 		</ul>
+		<div id="wp-rebase-data-tab-contents">
+			<?php do_action('wp_rebase_admin_screen_'.self::$_current); ?>
 		</div>
-		
+		</div>
 		<?php
-		do_action('wp_rebase_admin_screen_'.self::$_current);
 	}
 	
 	public static function admin_js() {
 		header('Content-Type: text/javascript');
 		?>
-		function doResave(data) {
+		function doResave($form) {
 			var $ = jQuery;
-			if (typeof data.action === "undefined") {
-				data.action = "wp_rebase_data";
+			if (console) {
+				console.log($form.serialize());
+			}
+			if ($form.find("[name=\"action\"]").length === 0) {
+				$form.append("<input type=\"hidden\" name=\"action\" value=\"wp_rebase_data\" />");
 			}
 			$.ajax({
 				"type": "POST",
 				"async": true,
 				"url": ajaxurl,
-				"data": data, /*{
-					"action": "wp_rebase_data",
-					"resave_action": action,
-					"post_types": resavePosts.post_types,
-					"post_stati": resavePosts.post_stati,
-					"paged": resavePosts.page
-				},*/
+				"data": $form.serialize(),
 				"success": function(response) {
 					$("body").trigger("wpRebaseAjaxSuccess", response);
 				},
 				"error": function(xhr) {
 					$("body").trigger("wpRebaseAjaxError", xhr);
 				}
-			});1
+			});
 		}
 		<?php
 		do_action('wp_rebase_admin_scripts');
@@ -129,10 +127,11 @@ class WP_Rebase_Data {
 		}
 		.tab-list {
 				padding: 10px 5px 0 5px;
-				border-radius: 5px;
+				border-radius: 5px 5px 0px 0px;
 				background-color: #21759b;
 				background-image: linear-gradient(to bottom,#2a95c5,#21759b);
 				overflow:hidden;
+				margin-bottom: 0px;
 		}
 		.tab-list .tab {
 			border-radius: 5px 5px 0 0;
@@ -160,6 +159,13 @@ class WP_Rebase_Data {
 		.tab-list .tab.current-tab {
 			background-color: #FFFFFF;
 			background-image: linear-gradient(to top, #FFFFFF, #CCCCCC);
+		}
+		#wp-rebase-data-tab-contents {
+			border: 1px solid #21759b;
+			border-top:none;
+			box-sizing:border-box;
+			border-radius: 0px 0px 5px 5px;
+			padding: 10px;
 		}
 		<?php
 		if ($_GET['hook']) {

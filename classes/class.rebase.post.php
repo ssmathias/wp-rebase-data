@@ -132,38 +132,40 @@ class WPRD_Rebase_Postdata {
 		$form_id = '#wp-rebase-data-'.self::$_id;
 		$styles = <<<EOD
 		$form_id {
-			width: 400px;
+			width: 100%;
+			overflow: hidden;
 		}
 		$form_id fieldset {
-			border: thin solid #333333;
-			padding: 0 5px;
-			width: 100%;
-			margin-bottom: 5px;
-			border-radius: 3px;
+			margin-right: 8px;
+			float: left;
 		}
 		$form_id legend {
-			margin: 0px 5px;
 			font-weight: bold;
 		}
-		$form_id li {
-			width: 185px;
-			float: left;
-			margin-right: 5px;
+		$form_id .checkbox-list {
+			margin: 0;
+			padding: 0;
 		}
-		$form_id .progress-indicator {
-			display: none;
+		$form_id .checkbox-list li {
+			margin: 3px 0;
+			padding: 0;
 		}
-		$form_id .progress-bar-wrapper {
-			width: 100%;
-			padding: 2px;
-			background-color: #999;
-			border-radius: 3px;
+		$form_id .checkbox-list-wrapper {
+			border: 1px solid #000033;
+			padding-left: 3px;
+			width: 200px;
+			height: 200px;
+			overflow-x: hidden;
+			overflow-y: scroll;
 		}
-		$form_id .progress-bar {
-			height: 20px;
-			width: 0px;
-			border-radius: 2px;
-			background-color: lime;
+		
+		$form_id .form-controls {
+			padding-top: 5px;
+			clear: both;
+		}
+		
+		$form_id .selection-link {
+			margin-left: 5px;
 		}
 EOD;
 		echo $styles;
@@ -172,81 +174,84 @@ EOD;
 	static  function adminScripts() {
 		// Admin scripts for this form
 		$form_selector = '#wp-rebase-data-'.self::$_id;
+		echo file_get_contents(dirname(__FILE__).'/../jquery-ui/js/jquery-ui.custom.min.js');
+		echo file_get_contents(dirname(__FILE__).'/../progress-indicator/progress-indicator.js');
 		?>
 		jQuery(document).ready(function($) {
 			var $form = $(<?php echo json_encode($form_selector); ?>),
 				$nonceField = $(<?php echo json_encode($form_selector . ' input[name="key"]'); ?>),
 				data = {};
+				
+			function onRebaseAjaxSuccess(e, response) {
+				var completePercent, $paged = $form.find("input[name=\"paged\"]");
+				response = jQuery.parseJSON(response);
+				$paged.val(parseInt($paged.val()) + 1);
+				if (typeof response.key !== "undefined") {
+					$nonceField.val(response.key);
+				}
+				$form.progressIndicator("setCompletionText", response.records_complete + " / " + response.total_records);
+				completePercent = (response.records_complete / response.total_records);
+				$form.progressIndicator("updateProgress", completePercent);
+				if (response.warnings.length > 0) {
+					for (var i in response.warnings) {
+						$form.progressIndicator("addWarning", response.warnings[i]);
+					}
+				}
+				if (completePercent < 1) {
+					// We need to do this again. Loop it with a timeout so we can redraw the screen.
+					doResave($form);
+				}
+			}
+			
+			function onRebaseAjaxError(e, xhr) {
+				var errorText = "An unknown error has occurred",
+					responseText = "";
+				try {
+					responseText = $.parseJSON(xhr.responseText);
+					responseText = responseText.message;
+				}
+				catch (unused) {
+					responseText = xhr.responseText;
+				}
+				console.log(responseText);
+				if (responseText.length > 0) {
+					errorText = responseText;
+				}
+				$form.progressIndicator("setErrorState", errorText);
+			}
 			$form
+				.find(".multi-check").each(function() {
+					var $this = $(this),
+						$legend = $(this).children("legend:first"),
+						selectAllText = <?php echo json_encode(__('All', 'sm-wp-rebase-data')); ?>,
+						selectNoneText = <?php echo json_encode(__('None', 'sm-wp-rebase-data')); ?>;
+					$legend.append($("<a href=\"#\" class=\"selection-link\">" + selectAllText + "</a>").click(function(e) {
+						e.preventDefault();
+						e.stopPropagation();
+						$(this).closest(".multi-check").find(".checkbox-list-wrapper :checkbox").prop("checked", true);
+					})).append($("<a href=\"#\" class=\"selection-link\">" + selectNoneText + "</a>").click(function(e) {
+						e.preventDefault();
+						e.stopPropagation();
+						$(this).closest(".multi-check").find(".checkbox-list-wrapper :checkbox").prop("checked", false);
+					}));
+				})
+				.end()
 				.on("submit", function(e) {
 					e.preventDefault();
 					e.stopPropagation();
-					data.hook = <?php echo json_encode(self::$_hook); ?>;
-					data.post_stati = [];
-					data.post_types = [];
-					data.page = 1;
-					data.key = $form.find("input[name=\"key\"]").val();
-					$form
-						.find("#wp-rebase-data-post-types")
-							.find("input[type=\"checkbox\"]:checked").each(function() {
-								data.post_types.push($(this).val());
-							}).end()
-						.end().find("#wp-rebase-data-post-stati")
-							.find("input[type=\"checkbox\"]:checked").each(function() {
-								data.post_stati.push($(this).val());
-							}).end()
-						.end().find("button, input").attr("disabled", "disabled")
-						.end().find(".progress-indicator").show()
-							.find(".current-task").html(<?php echo json_encode(__('Saving Records', 'sm-wp-rebase-data')); ?>);
-					doResave(data);
+					$form.progressIndicator("activate", "Saving Posts");
+					doResave($form);
+					
+					$("body").on("wpRebaseAjaxError", onRebaseAjaxError)
+						.on("wpRebaseAjaxSuccess", onRebaseAjaxSuccess);
 				})
-			$("body").on("wpRebaseAjaxError", function(xhr) {	
-				$form
-					.find("button, input")
-						.removeAttr("disabled");
-				alert(<?php echo json_encode(__('Could not save. Confirm your settings and try again.')); ?>);
-				
-			}).on("wpRebaseAjaxSuccess", function(e, response) {
-				var completePercent;
-				response = jQuery.parseJSON(response);
-				console.log("LOGGING OUT DATA AFTER SUCCESS");
-				console.log(data);
-				data.page += 1;
-				if (typeof response.key !== "undefined") {
-					data.key = response.key
-					$nonceField.val(response.key);
-				}
-				hasComplete = (response.total_records <= response.records_complete);
-				if (response.total_records == 0) {
-					completePercent = "100%";
-				}
-				else {
-					completePercent = Math.round((response.records_complete / response.total_records) * 100) + "%";
-				}
-				
-				$form
-					.find(".progress-indicator")
-						.find(".progress-bar")
-							.width(completePercent)
-							.end()
-						.find(".numeric-indicator")
-							.html(response.records_complete + "/" + response.total_records)
-							.end()
-						.find(".ajax-errors")
-							.append(response.warnings);
-							
-				if (!hasComplete) {
-					// We need to do this again. Loop it with a timeout so we can redraw the screen.
-					doResave(data);
-				}
-				else {
-					$form
-						.find("button, input")
-							.removeAttr("disabled")
-						.end().find(".progress-indicator .current-task")
-							.html(<?php echo json_encode(__('Saving Records Complete', 'sm-wp-rebase-data'))?>);
-				}
-			});
+			
+			$form.progressIndicator();
+			$form.progressIndicator("onClose", function() {
+				$("body").off("wpRebaseAjaxSuccess", onRebaseAjaxSuccess)
+					.off("wpRebaseAjaxError", onRebaseAjaxError);
+				$form.find("input[name=\"paged\"]").val(1);
+			})
 		});
 		<?php
 	}
@@ -261,39 +266,45 @@ EOD;
 		?>
 		<form id="wp-rebase-data-postdata" action="#" method="POST">
 		<?php wp_nonce_field('wp_rebase_data_postdata', 'key'); ?>
+		<input type="hidden" name="hook" value="<?php echo esc_attr(self::$_hook); ?>" />
+		<input type="hidden" name="paged" value="1" />
 		<?php if (!empty($allowed_post_types)) { ?>
-		<fieldset id="wp-rebase-data-post-types">
+		<fieldset id="wp-rebase-data-post-types" class="multi-check">
 			<legend><?php echo esc_html(__('Post Types', 'sm-wp-rebase-data')); ?></legend>
-			<ul class="checkbox-list">
-				<?php foreach ($allowed_post_types as $type) { ?>
-				<li>
-					<input type="checkbox" name="post-types[]" id="post-type-<?php echo esc_attr($type); ?>" value="<?php echo esc_attr($type); ?>" />
-					<label for="post-type-<?php echo esc_attr($type); ?>"><?php echo esc_html($type); ?></label>
-				</li>
+			<div class="checkbox-list-wrapper">
+				<ul class="checkbox-list">
+				<?php foreach ($allowed_post_types as $type) {
+					$label = ucwords($type);
+					// Try for a nicer label, where possible.
+					if ($obj = get_post_type_object($type)) {
+						$label = $obj->labels->name;
+					}
+					?>
+					<li>
+						<input type="checkbox" name="post_types[]" id="post-type-<?php echo esc_attr($type); ?>" value="<?php echo esc_attr($type); ?>" />
+						<label for="post-type-<?php echo esc_attr($type); ?>"><?php echo esc_html($label); ?></label>
+					</li>
 				<?php } ?>
-			</ul>
+				</ul>
+			</div>
 		</fieldset>
 		<?php } ?>
 		<?php if (!empty($allowed_post_stati)) { ?>
-		<fieldset id="wp-rebase-data-post-stati">
+		<fieldset id="wp-rebase-data-post-stati" class="multi-check">
 			<legend><?php echo esc_html(__('Post Stati', 'sm-wp-rebase-data')); ?></legend>
-			<ul class="checkbox-list">
-				<?php foreach ($allowed_post_stati as $status) { ?>
-				<li>
-					<input type="checkbox" name="post-status[]" id="post-status-<?php echo esc_attr($status); ?>" value="<?php echo esc_attr($status); ?>" />
-					<label for="post-status-<?php echo $status; ?>"><?php echo esc_html($status); ?></label>
-				</li>
-				<?php } ?>
-			</ul>
-		</fieldset>
-		<button class="button button-primary" id="btn-run-resave"><?php echo esc_html(__('Resave Selected Posts', 'sm-wp-rebase-data')); ?></button>
-		<div class="progress-indicator">
-			<div class="progress-bar-wrapper" style="float:left;clear:both">
-				<div class="progress-bar"></div>
+			<div class="checkbox-list-wrapper">
+				<ul class="checkbox-list">
+					<?php foreach ($allowed_post_stati as $status) { ?>
+					<li>
+						<input type="checkbox" name="post_stati[]" id="post-status-<?php echo esc_attr($status); ?>" value="<?php echo esc_attr($status); ?>" />
+						<label for="post-status-<?php echo $status; ?>"><?php echo esc_html(ucwords($status)); ?></label>
+					</li>
+					<?php } ?>
+				</ul>
 			</div>
-			<div class="current-task" style="float:left;"></div>
-			<div class="numeric-indicator" style="float:right;"></div>
-			<div class="ajax-errors"></div>
+		</fieldset>
+		<div class="form-controls">
+			<button class="button button-primary" id="btn-run-resave"><?php echo esc_html(__('Resave Selected Posts', 'sm-wp-rebase-data')); ?></button>
 		</div>
 		</form>
 		<?php }
