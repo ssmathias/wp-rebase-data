@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2.0.1
+- Updated styles for tabs
+- Fixed markup for tabs
+- Renamed main plugin file
+
 ## 2.0
 - Updated to be more extensible
 - Now automatically regenerates attachment metadata (aka regenerate thumbnails) when rebasing attachments.
