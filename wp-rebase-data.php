@@ -17,7 +17,6 @@ class WP_Rebase_Data {
 	public static function admin_init() {
 		if (!class_exists('WPRD_Rebase_Posts')) {
 			include WP_REBASE_PLUGIN_DIR.'classes/class.rebase.post.php';
-			include WP_REBASE_PLUGIN_DIR.'classes/class.rebase.user.php';
 		}
 		do_action('wp_rebase_load_libraries');
 		
