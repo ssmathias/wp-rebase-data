@@ -1,6 +1,7 @@
 /**
  * Progress Indicator
- * Requires jQuery
+ * Requires jQuery, jQuery UI
+ * Todo: Ideally we should be able to remove the dependency on jquery-ui for this.
  */
 (function($) {
 	$.widget("com-devbyday.progressIndicator", {

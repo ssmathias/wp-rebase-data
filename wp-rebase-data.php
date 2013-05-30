@@ -32,8 +32,10 @@ class WP_Rebase_Data {
 
 	public static function admin_enqueue_scripts($hook) {
 		if ($hook == 'tools_page_wp-rebase-data') {
-			wp_enqueue_script('wp-rebase-data-js', admin_url('admin-ajax.php?action=wp_rebase_data_js&hook='.self::$_current), array('jquery'));
-			wp_enqueue_style('wp-rebase-data-css', admin_url('admin-ajax.php').'?action=wp_rebase_data_css&hook='.self::$_current);
+			wp_enqueue_script('wp-rebase-data-js', admin_url('admin-ajax.php?action=wp_rebase_data_js'), array('jquery'));
+			do_action('wp_rebase_admin_scripts_'.self::$_current);
+			wp_enqueue_style('wp-rebase-data-css', admin_url('admin-ajax.php?action=wp_rebase_data_css'));
+			do_action('wp_rebase_admin_styles_'.self::$_current);
 		}
 	}
 
@@ -86,6 +88,10 @@ class WP_Rebase_Data {
 	
 	public static function admin_js() {
 		header('Content-Type: text/javascript');
+		if ($_GET['hook']) {
+			do_action('wp_rebase_admin_print_scripts_'.$_GET['hook']);
+			exit();
+		}
 		?>
 		function doResave($form) {
 			var $ = jQuery;
@@ -110,15 +116,15 @@ class WP_Rebase_Data {
 		}
 		<?php
 		do_action('wp_rebase_admin_scripts');
-		if ($_GET['hook']) {
-			do_action('wp_rebase_admin_scripts_'.$_GET['hook']);
-		}
 		exit();
 	}
 	
 	public static function admin_css() {
 		header('Content-Type: text/css');
-		do_action('wp_rebase_admin_styles');
+		if ($_GET['hook']) {
+			do_action('wp_rebase_admin_print_styles_'.$_GET['hook']);
+			exit();
+		}
 		?>
 		#wp-rebase-data-admin {
 			width: 95%;
@@ -167,9 +173,7 @@ class WP_Rebase_Data {
 			padding: 10px;
 		}
 		<?php
-		if ($_GET['hook']) {
-			do_action('wp_rebase_admin_styles_'.$_GET['hook']);
-		}
+		do_action('wp_rebase_admin_print_styles');
 		exit();
 	}
 

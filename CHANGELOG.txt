@@ -3,6 +3,7 @@
 ## feature/refactor-progress-indicator
 - Refactored progress indicator into jQuery UI modal with callable member methods
 - Redesigned interaction with default post data form
+- Refactored script/style enqueue and print system
 
 ## 2.0.1
 - Updated styles for tabs

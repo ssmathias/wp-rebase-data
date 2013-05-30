@@ -12,8 +12,10 @@ class WPRD_Rebase_Postdata {
 		$hook = self::$_hook;
 
 		add_filter('wp_rebase_admin_tabs', 'WPRD_Rebase_Postdata::adminTab');
-		add_action("wp_rebase_admin_styles_{$hook}", 'WPRD_Rebase_Postdata::adminStyles');
-		add_action("wp_rebase_admin_scripts_{$hook}", 'WPRD_Rebase_Postdata::adminScripts');
+		add_action("wp_rebase_admin_print_styles_{$hook}", 'WPRD_Rebase_Postdata::printAdminStyles');
+		add_action("wp_rebase_admin_scripts_{$hook}", 'WPRD_Rebase_Postdata::enqueueAdminScripts');
+		add_action("wp_rebase_admin_styles_{$hook}", 'WPRD_Rebase_Postdata::enqueueAdminStyles');
+		add_action("wp_rebase_admin_print_scripts_{$hook}", 'WPRD_Rebase_Postdata::printAdminScripts');
 		add_action("wp_rebase_admin_screen_{$hook}", 'WPRD_Rebase_Postdata::adminScreen');
 		add_action("wp_rebase_ajax_{$hook}", 'WPRD_Rebase_Postdata::handleAjax');
 	}
@@ -127,7 +129,11 @@ class WPRD_Rebase_Postdata {
 		exit();
 	}
 	
-	static function adminStyles() {
+	static function enqueueAdminStyles() {
+		wp_enqueue_style('wp-rebase-postdata-css', admin_url('admin-ajax.php?action=wp_rebase_data_css&hook='.self::$_hook));
+	}
+	
+	static function printAdminStyles() {
 		// Admin styles for this form
 		$form_id = '#wp-rebase-data-'.self::$_id;
 		$styles = <<<EOD
@@ -171,10 +177,15 @@ EOD;
 		echo $styles;
 	}
 	
-	static  function adminScripts() {
+	static function enqueueAdminScripts() {
+		wp_enqueue_script('jquery-ui-core');
+		wp_enqueue_script('jquery-ui-widget');
+		wp_enqueue_script('wp-rebase-postdata', admin_url('admin-ajax.php?action=wp_rebase_data_js&hook='.self::$_hook), array('jquery', 'jquery-ui-core', 'jquery-ui-widget'));
+	}
+	
+	static function printAdminScripts() {
 		// Admin scripts for this form
 		$form_selector = '#wp-rebase-data-'.self::$_id;
-		echo file_get_contents(dirname(__FILE__).'/../jquery-ui/js/jquery-ui.custom.min.js');
 		echo file_get_contents(dirname(__FILE__).'/../progress-indicator/progress-indicator.js');
 		?>
 		jQuery(document).ready(function($) {
