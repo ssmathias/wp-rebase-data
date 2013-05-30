@@ -17,7 +17,6 @@ class WP_Rebase_Data {
 	public static function admin_init() {
 		if (!class_exists('WPRD_Rebase_Posts')) {
 			include WP_REBASE_PLUGIN_DIR.'classes/class.rebase.post.php';
-			include WP_REBASE_PLUGIN_DIR.'classes/class.rebase.user.php';
 		}
 		do_action('wp_rebase_load_libraries');
 		
@@ -33,8 +32,10 @@ class WP_Rebase_Data {
 
 	public static function admin_enqueue_scripts($hook) {
 		if ($hook == 'tools_page_wp-rebase-data') {
-			wp_enqueue_script('wp-rebase-data-js', admin_url('admin-ajax.php?action=wp_rebase_data_js&hook='.self::$_current), array('jquery'));
-			wp_enqueue_style('wp-rebase-data-css', admin_url('admin-ajax.php').'?action=wp_rebase_data_css&hook='.self::$_current);
+			wp_enqueue_script('wp-rebase-data-js', admin_url('admin-ajax.php?action=wp_rebase_data_js'), array('jquery'));
+			do_action('wp_rebase_admin_scripts_'.self::$_current);
+			wp_enqueue_style('wp-rebase-data-css', admin_url('admin-ajax.php?action=wp_rebase_data_css'));
+			do_action('wp_rebase_admin_styles_'.self::$_current);
 		}
 	}
 
@@ -78,50 +79,52 @@ class WP_Rebase_Data {
 			}
 		} ?>
 		</ul>
+		<div id="wp-rebase-data-tab-contents">
+			<?php do_action('wp_rebase_admin_screen_'.self::$_current); ?>
 		</div>
-		
+		</div>
 		<?php
-		do_action('wp_rebase_admin_screen_'.self::$_current);
 	}
 	
 	public static function admin_js() {
 		header('Content-Type: text/javascript');
+		if ($_GET['hook']) {
+			do_action('wp_rebase_admin_print_scripts_'.$_GET['hook']);
+			exit();
+		}
 		?>
-		function doResave(data) {
+		function doResave($form) {
 			var $ = jQuery;
-			if (typeof data.action === "undefined") {
-				data.action = "wp_rebase_data";
+			if (console) {
+				console.log($form.serialize());
+			}
+			if ($form.find("[name=\"action\"]").length === 0) {
+				$form.append("<input type=\"hidden\" name=\"action\" value=\"wp_rebase_data\" />");
 			}
 			$.ajax({
 				"type": "POST",
 				"async": true,
 				"url": ajaxurl,
-				"data": data, /*{
-					"action": "wp_rebase_data",
-					"resave_action": action,
-					"post_types": resavePosts.post_types,
-					"post_stati": resavePosts.post_stati,
-					"paged": resavePosts.page
-				},*/
+				"data": $form.serialize(),
 				"success": function(response) {
 					$("body").trigger("wpRebaseAjaxSuccess", response);
 				},
 				"error": function(xhr) {
 					$("body").trigger("wpRebaseAjaxError", xhr);
 				}
-			});1
+			});
 		}
 		<?php
 		do_action('wp_rebase_admin_scripts');
-		if ($_GET['hook']) {
-			do_action('wp_rebase_admin_scripts_'.$_GET['hook']);
-		}
 		exit();
 	}
 	
 	public static function admin_css() {
 		header('Content-Type: text/css');
-		do_action('wp_rebase_admin_styles');
+		if ($_GET['hook']) {
+			do_action('wp_rebase_admin_print_styles_'.$_GET['hook']);
+			exit();
+		}
 		?>
 		#wp-rebase-data-admin {
 			width: 95%;
@@ -129,10 +132,11 @@ class WP_Rebase_Data {
 		}
 		.tab-list {
 				padding: 10px 5px 0 5px;
-				border-radius: 5px;
+				border-radius: 5px 5px 0px 0px;
 				background-color: #21759b;
 				background-image: linear-gradient(to bottom,#2a95c5,#21759b);
 				overflow:hidden;
+				margin-bottom: 0px;
 		}
 		.tab-list .tab {
 			border-radius: 5px 5px 0 0;
@@ -161,10 +165,15 @@ class WP_Rebase_Data {
 			background-color: #FFFFFF;
 			background-image: linear-gradient(to top, #FFFFFF, #CCCCCC);
 		}
-		<?php
-		if ($_GET['hook']) {
-			do_action('wp_rebase_admin_styles_'.$_GET['hook']);
+		#wp-rebase-data-tab-contents {
+			border: 1px solid #21759b;
+			border-top:none;
+			box-sizing:border-box;
+			border-radius: 0px 0px 5px 5px;
+			padding: 10px;
 		}
+		<?php
+		do_action('wp_rebase_admin_print_styles');
 		exit();
 	}
 
