@@ -4,7 +4,7 @@
  * Plugin URI: http://github.com/ssmathias/wp-rebase-data
  * Description: Allows a site admin to trigger "save" actions on a variety of data programmatically.
  * Author: Steven Mathias
- * Version: 2.0.1
+ * Version: indev
  * Author URI: http://github.com/ssmathias/
  **/
 
@@ -17,6 +17,7 @@ class WP_Rebase_Data {
 	public static function admin_init() {
 		if (!class_exists('WPRD_Rebase_Posts')) {
 			include WP_REBASE_PLUGIN_DIR.'classes/class.rebase.post.php';
+			include WP_REBASE_PLUGIN_DIR.'classes/class.rebase.taxonomy.php';
 		}
 		do_action('wp_rebase_load_libraries');
 		
