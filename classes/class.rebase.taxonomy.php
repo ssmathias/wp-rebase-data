@@ -1,29 +1,29 @@
 <?php
 /**
- * Class: WPRD_Rebase_Postdata (abstract)
+ * Class: WPRD_Rebase_Taxdata
  */
 
-class WPRD_Rebase_Postdata {
-	private static $_hook = 'postdata';
-	private static $_id = 'postdata';
+class WPRD_Rebase_Taxdata {
+	private static $_hook = 'taxdata';
+	private static $_id = 'taxdata';
 	
 	static function apply() {
 		// Execute at wp_rebase_load_libraries
 		$hook = self::$_hook;
 
-		add_filter('wp_rebase_admin_tabs', 'WPRD_Rebase_Postdata::adminTab');
-		add_action("wp_rebase_admin_print_styles_{$hook}", 'WPRD_Rebase_Postdata::printAdminStyles');
-		add_action("wp_rebase_admin_scripts_{$hook}", 'WPRD_Rebase_Postdata::enqueueAdminScripts');
-		add_action("wp_rebase_admin_styles_{$hook}", 'WPRD_Rebase_Postdata::enqueueAdminStyles');
-		add_action("wp_rebase_admin_print_scripts_{$hook}", 'WPRD_Rebase_Postdata::printAdminScripts');
-		add_action("wp_rebase_admin_screen_{$hook}", 'WPRD_Rebase_Postdata::adminScreen');
-		add_action("wp_rebase_ajax_{$hook}", 'WPRD_Rebase_Postdata::handleAjax');
+		add_filter('wp_rebase_admin_tabs', 'WPRD_Rebase_Taxdata::adminTab');
+		add_action("wp_rebase_admin_print_styles_{$hook}", 'WPRD_Rebase_Taxdata::printAdminStyles');
+		add_action("wp_rebase_admin_scripts_{$hook}", 'WPRD_Rebase_Taxdata::enqueueAdminScripts');
+		add_action("wp_rebase_admin_styles_{$hook}", 'WPRD_Rebase_Taxdata::enqueueAdminStyles');
+		add_action("wp_rebase_admin_print_scripts_{$hook}", 'WPRD_Rebase_Taxdata::printAdminScripts');
+		add_action("wp_rebase_admin_screen_{$hook}", 'WPRD_Rebase_Taxdata::adminScreen');
+		add_action("wp_rebase_ajax_{$hook}", 'WPRD_Rebase_Taxdata::handleAjax');
 	}
 	
 	static function handleAjax() {
 		global $post;
 		// Execute on appropriate ajax call
-		if (!check_admin_referer('wp_rebase_data_postdata', 'key')) {
+		if (!check_admin_referer('wp_rebase_data_taxdata', 'key')) {
 			header('HTTP/1.0 403 Forbidden');
 			$response = json_encode(array(
 				'status' => 'error',
@@ -32,7 +32,7 @@ class WPRD_Rebase_Postdata {
 			print $response;
 			exit();
 		}
-		$new_key = wp_create_nonce('wp_rebase_data_postdata');
+		$new_key = wp_create_nonce('wp_rebase_data_taxdata');
 		if (!current_user_can('manage_options')) {
 			header('HTTP/1.0 403 Forbidden');
 			$response = json_encode(array(
@@ -42,76 +42,61 @@ class WPRD_Rebase_Postdata {
 			print $response;
 			exit();
 		}
-		if (empty($_POST['post_types'])) {
+		if (empty($_POST['taxonomies'])) {
 			header('HTTP/1.0 401 Invalid Request');
 			$response = json_encode(array(
 				'status' => 'error',
-				'message' => 'At least one post type must be selected',
+				'message' => 'At least one taxonomy must be selected',
 				'key' => $new_key,
 			));
 			print $response;
 			exit();
 		}
-		$post_types = $_POST['post_types'];
-		if (!is_array($post_types)) {
-			$post_types = explode(',', $post_types);
+		$taxonomies = $_POST['taxonomies'];
+		if (!is_array($taxonomies)) {
+			$taxonomies = explode(',', $taxonomies);
 			// TODO Use array_map here
-			foreach ($post_types as $i=>$type) {
-				$post_types[$i] = trim($type);
-			}
-		}
-		if (empty($_POST['post_stati'])) {
-			header('HTTP/1.0 401 Invalid Request');
-			$response = json_encode(array(
-				'status' => 'error',
-				'message' => 'At least one post status must be selected',
-				'key' => $new_key,
-			));
-			print $response;
-			exit();
-		}
-		$post_stati = $_POST['post_stati'];
-		if (!is_array($post_stati)) {
-			$post_stati = array($post_stati);
-			// TODO Use array_map here
-			foreach ($post_stati as $i=>$status) {
-				$post_stati[$i] = trim($status);
+			foreach ($taxonomies as $i=>$taxonomy) {
+				$taxonomies[$i] = trim($taxonomy);
 			}
 		}
 		// May eventually allow posts per page to be configured from front-end.
-		$posts_per_page = 25;
+		$terms_per_page = 25;
 		
 		$paged = 1;
 		if (!empty($_POST['paged']) && is_numeric($_POST['paged'])) {
 			$paged = intval($_POST['paged']);
 		}
 		$warnings = array();
-		$query = new WP_Query(array(
-			'post_type' => $post_types,
-			'post_status' => $post_stati,
-			'posts_per_page' => $posts_per_page,
-			'paged' => $paged,
-			'no_found_rows' => false,
-			'suppress_filters' => true,
-		));
-		$total_done = $posts_per_page * ($paged - 1);
-		while ($query->have_posts()) {
-			$query->the_post();
-			$post_array = array();
-			$post_array['ID'] = $post->ID;
-			
-			$result = wp_update_post($post_array);
-			if (is_wp_error($result)) {
-				$warnings[] = 'Error saving post #'.$post->ID;
-			}
-			else if ($post->post_type == 'attachment' && $file = get_attached_file($post->ID, false)) {
-				$metadata = wp_generate_attachment_metadata($post->ID, $file);
-				if (!empty($metadata)) {
-					wp_update_attachment_metadata($post->ID, $metadata);
-				}
-			}
-			++$total_done;
+		
+		$total_done = $terms_per_page * ($paged - 1);
+		
+		// Doing this twice is unfortunate, however we don't want to load all the term objects to get the count.
+		$count = get_terms($taxonomies, array('get' => 'all', 'fields' => 'count'));
+		if (is_wp_error($count)) {
+			$warnings[] = 'Could not calculate total terms to be updated.';
+			$count = 0;
 		}
+		$terms = get_terms($taxonomies, array(
+			'get' => 'all',
+			'number' => $terms_per_page,
+			'offset' => $total_done,
+		));
+		
+		if (is_wp_error($terms)) {
+			$warnings[] = 'Error retrieving terms. Could not continue';
+			header('HTTP/1.0 201 Done With Errors');
+		}
+		else if (!empty($terms)) {
+			foreach ($terms as $term) {
+				$result = wp_update_term($term->term_id, $term->taxonomy);
+				if (empty($result) || is_wp_error($result)) {
+					$warnings[] = 'Error updating "' . $term->name . '" in taxonomy "' . $term->taxonomy . '"';
+				}
+				++$total_done;
+			}
+		}
+		
 		if (!empty($warnings)) {
 			header('HTTP/1.0 201 Done With Errors');
 		}
@@ -120,7 +105,7 @@ class WPRD_Rebase_Postdata {
 		}
 		$response = json_encode(array(
 			'status' => 'success',
-			'total_records' => intval($query->found_posts),
+			'total_records' => intval($count),
 			'records_complete' => $total_done,
 			'warnings' => $warnings,
 			'key' => $new_key,
@@ -130,7 +115,7 @@ class WPRD_Rebase_Postdata {
 	}
 	
 	static function enqueueAdminStyles() {
-		wp_enqueue_style('wp-rebase-postdata-css', admin_url('admin-ajax.php?action=wp_rebase_data_css&hook='.self::$_hook));
+		wp_enqueue_style('wp-rebase-taxdata-css', admin_url('admin-ajax.php?action=wp_rebase_data_css&hook='.self::$_hook));
 	}
 	
 	static function printAdminStyles() {
@@ -180,7 +165,7 @@ EOD;
 	static function enqueueAdminScripts() {
 		wp_enqueue_script('jquery-ui-core');
 		wp_enqueue_script('jquery-ui-widget');
-		wp_enqueue_script('wp-rebase-postdata', admin_url('admin-ajax.php?action=wp_rebase_data_js&hook='.self::$_hook), array('jquery', 'jquery-ui-core', 'jquery-ui-widget'));
+		wp_enqueue_script('wp-rebase-taxdata', admin_url('admin-ajax.php?action=wp_rebase_data_js&hook='.self::$_hook), array('jquery', 'jquery-ui-core', 'jquery-ui-widget'));
 	}
 	
 	static function printAdminScripts() {
@@ -250,7 +235,7 @@ EOD;
 				.on("submit", function(e) {
 					e.preventDefault();
 					e.stopPropagation();
-					$form.progressIndicator("activate", "Saving Posts");
+					$form.progressIndicator("activate", "Saving Taxonomies");
 					doResave($form);
 					
 					$("body").on("wpRebaseAjaxError", onRebaseAjaxError)
@@ -270,52 +255,30 @@ EOD;
 	static function adminScreen() {
 		// Execute on wp_rebase_admin_screen_default
 		global $wpdb;
-		$post_types = $wpdb->get_col("SELECT DISTINCT post_type FROM {$wpdb->posts}");
-		$allowed_post_types = array_diff($post_types, apply_filters("wp_rebase_data_{self::$_hook}_excluded_types", array('revision')));
-		$post_stati = $wpdb->get_col("SELECT DISTINCT post_status FROM {$wpdb->posts}");
-		$allowed_post_stati = array_diff($post_stati, apply_filters("wp_rebase_data_{self::$_hook}_excluded_stati", array('auto-draft')));
+		$taxonomies = apply_filters("wp_rebase_data_{self::$_hook}_taxonomies", get_taxonomies(array(), 'objects'));
 		?>
-		<form id="wp-rebase-data-postdata" action="#" method="POST">
-		<?php wp_nonce_field('wp_rebase_data_postdata', 'key'); ?>
+		<form id="wp-rebase-data-taxdata" action="#" method="POST">
+		<?php wp_nonce_field('wp_rebase_data_taxdata', 'key'); ?>
 		<input type="hidden" name="hook" value="<?php echo esc_attr(self::$_hook); ?>" />
 		<input type="hidden" name="paged" value="1" />
-		<?php if (!empty($allowed_post_types)) { ?>
+		<?php if (!empty($taxonomies)) { ?>
 		<fieldset id="wp-rebase-data-post-types" class="multi-check">
-			<legend><?php echo esc_html(__('Post Types', 'sm-wp-rebase-data')); ?></legend>
+			<legend><?php echo esc_html(__('Taxonomies', 'sm-wp-rebase-data')); ?></legend>
 			<div class="checkbox-list-wrapper">
 				<ul class="checkbox-list">
-				<?php foreach ($allowed_post_types as $type) {
-					$label = ucwords($type);
-					// Try for a nicer label, where possible.
-					if ($obj = get_post_type_object($type)) {
-						$label = $obj->labels->name;
-					}
+				<?php foreach ($taxonomies as $tax=>$obj) {
+					$label = $obj->labels->name;
 					?>
 					<li>
-						<input type="checkbox" name="post_types[]" id="post-type-<?php echo esc_attr($type); ?>" value="<?php echo esc_attr($type); ?>" />
-						<label for="post-type-<?php echo esc_attr($type); ?>"><?php echo esc_html($label); ?> (<?php echo esc_html($type); ?>)</label>
+						<input type="checkbox" name="taxonomies[]" id="taxonomy-<?php echo esc_attr($tax); ?>" value="<?php echo esc_attr($tax); ?>" />
+						<label for="taxonomy-<?php echo esc_attr($tax); ?>"><?php echo esc_html($label); ?> (<?php echo esc_html($tax); ?>)</label>
 					</li>
 				<?php } ?>
 				</ul>
 			</div>
 		</fieldset>
-		<?php } ?>
-		<?php if (!empty($allowed_post_stati)) { ?>
-		<fieldset id="wp-rebase-data-post-stati" class="multi-check">
-			<legend><?php echo esc_html(__('Post Stati', 'sm-wp-rebase-data')); ?></legend>
-			<div class="checkbox-list-wrapper">
-				<ul class="checkbox-list">
-					<?php foreach ($allowed_post_stati as $status) { ?>
-					<li>
-						<input type="checkbox" name="post_stati[]" id="post-status-<?php echo esc_attr($status); ?>" value="<?php echo esc_attr($status); ?>" />
-						<label for="post-status-<?php echo $status; ?>"><?php echo esc_html(ucwords($status)); ?></label>
-					</li>
-					<?php } ?>
-				</ul>
-			</div>
-		</fieldset>
 		<div class="form-controls">
-			<button class="button button-primary" id="btn-run-resave"><?php echo esc_html(__('Resave Selected Posts', 'sm-wp-rebase-data')); ?></button>
+			<button class="button button-primary" id="btn-run-resave"><?php echo esc_html(__('Resave Selected Taxonomies', 'sm-wp-rebase-data')); ?></button>
 		</div>
 		</form>
 		<?php }
@@ -325,7 +288,7 @@ EOD;
 		// Add appropriate tab for display.
 		if (current_user_can('manage_options')) {
 			$tabs[self::$_hook] = array(
-				'title' => __('Post Data', 'sm-wp-rebase-data'),
+				'title' => __('Taxonomy Data', 'sm-wp-rebase-data'),
 				'id' => self::$_id,
 			);
 		}
@@ -333,4 +296,4 @@ EOD;
 	}
 
 }
-add_action('wp_rebase_load_libraries', 'WPRD_Rebase_Postdata::apply');
+add_action('wp_rebase_load_libraries', 'WPRD_Rebase_Taxdata::apply');
